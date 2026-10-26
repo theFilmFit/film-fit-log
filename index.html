@@ -104,7 +104,11 @@ h3 { font-weight: 600; font-size: 13.5px; letter-spacing: .08em; line-height: 1.
 .chips.wrap { flex-wrap: wrap; overflow: visible; }
 .bday { display: grid; gap: 10px; padding-block: 16px; border-top: 1px solid var(--line); }
 .bday h3, .bday p { margin: 0; }
-.bday p { font-size: 13px; }
+.brows { display: grid; }
+.brow { display: grid; grid-template-columns: 1fr 44px 8px 76px 28px; gap: 6px; align-items: center; padding-block: 8px; border-top: 1px solid var(--line); }
+.brow.head { border-top: 0; padding-block: 0 4px; }
+.brow input { width: 100%; text-align: center; padding-inline: 4px; }
+.bname { text-align: left; font-weight: 600; text-decoration: underline dotted var(--muted); text-underline-offset: 4px; }
 .tick { display: flex; align-items: center; gap: 10px; font-size: 14px; }
 .tick input { width: 20px; height: 20px; accent-color: var(--accent); }
 .list { display: grid; border-top: 1px solid var(--line); }
@@ -361,6 +365,7 @@ function buildDays(b) {
     return { id: uid(), day: d, name: DAYS[d].slice(0, 3) + ' · ' + gs.join(' + '), items };
   });
 }
+function regen(b, days) { const all = buildDays(b); for (const d of days) b.items[d] = all.find(r => r.day === d).items; }
 const todayIdx = () => (new Date().getDay() + 6) % 7;
 
 /* ---------- state ---------- */
@@ -803,22 +808,28 @@ function viewRoutine() {
 }
 
 function viewBuilder() {
-  const b = state.builder, plan = buildDays(b);
-  const ready = b.days.length && b.days.every(d => (b.groups[d] || []).length);
+  const b = state.builder, days = b.days.slice().sort((x, y) => x - y);
+  const ready = days.length && days.every(d => (b.items[d] || []).length);
   return `<div class="wbar"><button class="link" data-act="tab" data-v="home">Annulla</button><span class="eyebrow">Nuova routine</span><button class="link" data-act="newBlank">A mano</button></div>
   ${vh('Passo 1', 'In che giorni ti alleni?')}
   <div class="week pick" role="group" aria-label="Giorni">${DAYS.map((d, i) => `<button data-act="bDay" data-d="${i}" aria-pressed="${b.days.includes(i)}"><span class="eyebrow">${d.slice(0, 3)}</span><b></b></button>`).join('')}</div>
   ${b.days.length ? `<div class="section">
     <header><h2>Passo 2 · Muscoli</h2><button class="link" data-act="bSuggest">Suggerisci</button></header>
     <p class="muted" style="margin:0">Tocca i gruppi da allenare ogni giorno, oppure "Suggerisci" per una divisione classica.</p>
-    ${plan.map(r => `<div class="bday"><h3>${DAYS[r.day]}</h3>
-      <div class="chips wrap">${GROUPS.map(g => `<button data-act="bGroup" data-d="${r.day}" data-g="${g}" aria-pressed="${(b.groups[r.day] || []).includes(g)}">${g}</button>`).join('')}</div>
-      <p class="muted">${r.items.length ? r.items.map(i => esc(ex(i.ex).name)).join(' · ') : 'Nessun gruppo scelto'}</p></div>`).join('')}
+    ${days.map(d => { const its = b.items[d] || []; return `<div class="bday"><h3>${DAYS[d]}</h3>
+      <div class="chips wrap">${GROUPS.map(g => `<button data-act="bGroup" data-d="${d}" data-g="${g}" aria-pressed="${(b.groups[d] || []).includes(g)}">${g}</button>`).join('')}</div>
+      ${its.length ? `<div class="brows"><div class="brow head"><span class="eyebrow">Tocca per cambiare</span><span class="eyebrow">Serie</span><span></span><span class="eyebrow">Reps</span><span></span></div>
+      ${its.map((it, i) => `<div class="brow"><button class="bname" data-act="bSwap" data-d="${d}" data-i="${i}">${esc(ex(it.ex).name)}</button>
+        <input id="bs-${d}-${i}" class="num" inputmode="numeric" data-field="bsets" data-d="${d}" data-i="${i}" value="${it.sets}" aria-label="Serie">
+        <span class="muted">×</span>
+        <input id="br-${d}-${i}" class="num" data-field="breps" data-d="${d}" data-i="${i}" value="${esc(it.reps)}" placeholder="—" autocomplete="off" aria-label="Ripetizioni">
+        <button class="x" data-act="bDel" data-d="${d}" data-i="${i}" aria-label="Rimuovi ${esc(ex(it.ex).name)}">✕</button></div>`).join('')}</div>` : ''}
+      <button class="link" data-act="bAdd" data-d="${d}" style="justify-self:start">+ Aggiungi esercizio</button></div>`; }).join('')}
   </div>` : '<p class="empty">Tocca i giorni in cui vai in palestra.</p>'}
   <div class="stack" style="margin-top:22px">
     ${profile.routines.length ? `<label class="tick"><input type="checkbox" id="bReplace" data-field="bReplace" ${b.replace ? 'checked' : ''}> Sostituisci le routine che ho già</label>` : ''}
-    <button class="btn accent block big" data-act="bCreate" ${ready ? '' : 'disabled'}>${ready ? 'Crea ' + plan.length + ' routine' : 'Scegli giorni e muscoli'}</button>
-    <p class="muted" style="margin:0;font-size:13px">Dopo puoi cambiare esercizi, serie e ripetizioni di ogni giorno.</p>
+    <button class="btn accent block big" data-act="bCreate" ${ready ? '' : 'disabled'}>${ready ? 'Crea ' + days.length + ' routine' : 'Scegli giorni e muscoli'}</button>
+    <p class="muted" style="margin:0;font-size:13px">Puoi cambiarli anche dopo, da Modifica.</p>
   </div>`;
 }
 
@@ -909,13 +920,18 @@ const acts = {
     <p class="muted" style="margin:0">Ogni giorno del programma diventa una routine che puoi modificare.</p>
     <div class="prog">${PROGRAMS.map((p, i) => `<button data-act="addProgram" data-i="${i}"><h3>${p.name}</h3><p>${p.note}</p><p>${p.days.map(d => d[0]).join(' · ')}</p><span class="plus">+ Aggiungi</span></button>`).join('')}</div>`),
   minimize: () => go('home'),
-  newRoutine: () => go('builder', { builder: { days: [], groups: {}, replace: false } }),
+  newRoutine: () => go('builder', { builder: { days: [], groups: {}, items: {}, replace: false } }),
   newBlank: () => go('routine', { routine: { id: uid(), name: '', items: [], day: null } }),
   bDay: el => { const b = state.builder, d = +el.dataset.d; b.days = b.days.includes(d) ? b.days.filter(x => x !== d) : [...b.days, d]; render(); },
-  bGroup: el => { const gs = state.builder.groups[el.dataset.d] ||= [], g = el.dataset.g, i = gs.indexOf(g); i < 0 ? gs.push(g) : gs.splice(i, 1); render(); },
-  bSuggest: () => { const b = state.builder, days = b.days.slice().sort((x, y) => x - y); days.forEach((d, i) => b.groups[d] = SPLITS[days.length][i].slice()); render(); },
+  // changing a day's muscles regenerates only that day's exercises; hand edits elsewhere stay
+  bGroup: el => { const b = state.builder, d = +el.dataset.d, gs = b.groups[d] ||= [], g = el.dataset.g, i = gs.indexOf(g); i < 0 ? gs.push(g) : gs.splice(i, 1); regen(b, [d]); render(); },
+  bSuggest: () => { const b = state.builder, days = b.days.slice().sort((x, y) => x - y); days.forEach((d, i) => b.groups[d] = SPLITS[days.length][i].slice()); regen(b, days); render(); },
+  bSwap: el => { const it = state.builder.items[el.dataset.d][+el.dataset.i]; openPicker(id => { it.ex = id; render(); }); },
+  bDel: el => { state.builder.items[el.dataset.d].splice(+el.dataset.i, 1); render(); },
+  bAdd: el => { const d = el.dataset.d; openPicker(id => { (state.builder.items[d] ||= []).push({ ex: id, ss: false, sets: 3, reps: '8-12' }); render(); }); },
   bCreate: () => {
-    const b = state.builder, plan = buildDays(b);
+    const b = state.builder, plan = b.days.slice().sort((x, y) => x - y).map(d => ({ id: uid(), day: d,
+      name: DAYS[d].slice(0, 3) + ' · ' + ((b.groups[d] || []).join(' + ') || 'Allenamento'), items: b.items[d] }));
     profile.routines = b.replace ? plan : [...profile.routines, ...plan];
     saveProfile(); go('home'); toast(plan.length + (plan.length === 1 ? ' routine creata' : ' routine create'));
   },
@@ -1098,6 +1114,8 @@ document.addEventListener('input', e => {
   else if (f === 'rname') state.routine.name = t.value;
   else if (f === 'rday') state.routine.day = t.value === '' ? null : +t.value;
   else if (f === 'bReplace') state.builder.replace = t.checked;
+  else if (f === 'bsets') state.builder.items[t.dataset.d][+t.dataset.i].sets = Math.min(20, Math.max(1, parseInt(t.value) || 1));
+  else if (f === 'breps') state.builder.items[t.dataset.d][+t.dataset.i].reps = t.value;
   else if (f === 'rsets') state.routine.items[+t.dataset.i].sets = Math.min(20, Math.max(1, parseInt(t.value) || 1));
   else if (f === 'rreps') state.routine.items[+t.dataset.i].reps = t.value;
 });
