@@ -1,4 +1,4 @@
-const C = 'ffl-1793037801';
+const C = 'ffl-1793041592';
 const CORE = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './apple-touch-icon.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(C).then(c => c.addAll(CORE))); self.skipWaiting(); });
 self.addEventListener('activate', e => e.waitUntil(caches.keys()
